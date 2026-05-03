@@ -15,7 +15,9 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 ESPN_API_URL = "https://site.web.api.espn.com/apis/common/v3/sports/cricket/athletes/{cricinfo_id}"
-DEFAULT_OUTPUT = Path("data/output/player_profiles.json")
+# DEFAULT_OUTPUT resolved at module load time for backward compatibility with direct imports
+_PROFILE_FETCHER_ROOT = Path(__file__).parent.parent.parent.resolve()
+DEFAULT_OUTPUT = _PROFILE_FETCHER_ROOT / "data" / "output" / "player_profiles.json"
 REQUEST_DELAY = 0.05
 
 
@@ -117,9 +119,10 @@ class ProfileFetcher:
 if __name__ == "__main__":
     import argparse
     logging.basicConfig(level=logging.INFO)
+    _ROOT = Path(__file__).parent.parent.parent.resolve()
     parser = argparse.ArgumentParser(description="Fetch ESPN player profiles")
-    parser.add_argument("--people-csv", default="people.csv")
-    parser.add_argument("--output", default="data/output/player_profiles.json")
+    parser.add_argument("--people-csv", default=str(_ROOT / "data" / "people.csv"))
+    parser.add_argument("--output", default=str(_ROOT / "data" / "output" / "player_profiles.json"))
     args = parser.parse_args()
     fetcher = ProfileFetcher(Path(args.people_csv), Path(args.output))
     profiles = fetcher.run()

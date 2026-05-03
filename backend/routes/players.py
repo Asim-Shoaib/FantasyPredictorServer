@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import asdict
 
@@ -69,44 +70,89 @@ def _build_identifier_to_cricinfo(people_csv_path) -> dict[str, str]:
         return {}
 
 
+def _build_people_indexes(people_csv_path) -> tuple[dict[str, dict], dict[str, list]]:
+    """Return (exact_by_name, by_lastname) indexes from people.csv.
+
+    exact_by_name: name.lower() → {identifier, key_cricinfo}
+    by_lastname:   last_word.lower() → list of {identifier, key_cricinfo, first_initial}
+
+    people.csv uses initials (e.g. "DA Warner") rather than full first names,
+    so we index by last name and first initial to resolve full-name roster entries.
+    """
+    if not people_csv_path.exists():
+        return {}, {}
+    try:
+        df = pd.read_csv(people_csv_path, dtype=str, low_memory=False).fillna("")
+        required = {"identifier", "name", "key_cricinfo"}
+        if not required.issubset(df.columns):
+            return {}, {}
+        exact: dict[str, dict] = {}
+        by_last: dict[str, list] = {}
+        for _, row in df.iterrows():
+            name = str(row["name"]).strip()
+            identifier = str(row["identifier"]).strip()
+            cid = str(row["key_cricinfo"]).strip()
+            if not name or not identifier or cid in ("", "nan"):
+                continue
+            if cid.endswith(".0"):
+                cid = cid[:-2]
+            entry = {"identifier": identifier, "key_cricinfo": cid}
+            exact[name.lower()] = entry
+            parts = name.lower().split()
+            if parts:
+                last = parts[-1]
+                first_initial = parts[0][0]
+                by_last.setdefault(last, []).append({**entry, "first_initial": first_initial})
+        return exact, by_last
+    except Exception as exc:
+        logger.error("Failed to build people.csv indexes: %s", exc)
+        return {}, {}
+
+
+def _resolve_roster_name(name: str, exact: dict, by_last: dict) -> dict | None:
+    """Resolve a full roster player name to a people.csv entry.
+
+    1. Exact lowercase match.
+    2. Last name + first initial match (unambiguous only).
+    """
+    key = name.lower().strip()
+    if key in exact:
+        return exact[key]
+    parts = key.split()
+    if not parts:
+        return None
+    last = parts[-1].rstrip(".")  # strip trailing dot (e.g. "Jr.")
+    first_initial = parts[0][0]
+    candidates = [c for c in by_last.get(last, []) if c["first_initial"] == first_initial]
+    if len(candidates) == 1:
+        return candidates[0]
+    return None
+
+
 @players_bp.route("/api/admin/fetch-photos", methods=["POST"])
 def fetch_photos():
     """Fetch ESPN headshots for all roster players and update the cache.
 
     player_profiles.json is keyed by Cricsheet identifier (same IDs used in the
     ELO CSV and returned by player_service.py) so that photo_url lookups succeed.
+    Works with or without the ELO CSV — falls back to matching roster names
+    directly against people.csv when ELO data is unavailable.
     """
-    # Step 1: Build identifier → cricinfo_id from people.csv
-    identifier_to_cricinfo = _build_identifier_to_cricinfo(_PEOPLE_CSV)
-    if not identifier_to_cricinfo:
-        return jsonify({"error": "Could not build identifier→cricinfo mapping from people.csv"}), 500
+    # Step 1: Build people.csv indexes
+    exact, by_last = _build_people_indexes(_PEOPLE_CSV)
+    if not exact:
+        return jsonify({"error": "Could not read people.csv — check data/people.csv exists"}), 500
 
-    # Step 2: Also build name → identifier from the ELO CSV so we can resolve
-    #         roster player names to their Cricsheet identifiers.
-    name_to_identifier: dict[str, str] = {}
-    if not cache.elo_df.empty and "player_name" in cache.elo_df.columns and "player_id" in cache.elo_df.columns:
-        for pid in cache.elo_df["player_id"].unique():
-            rows = cache.elo_df[cache.elo_df["player_id"] == pid]
-            if not rows.empty:
-                pname = str(rows.iloc[-1]["player_name"]).lower().strip()
-                name_to_identifier[pname] = str(pid)
-
-    # Step 3: Build player_map — { cricsheet_identifier: cricinfo_id }
-    #         Only include roster players that appear in the ELO CSV.
+    # Step 2: Build player_map — { cricsheet_identifier: cricinfo_id }
     player_map: dict[str, str] = {}
     unmapped: list[str] = []
 
     for player_name in cache.roster:
-        key = str(player_name).lower().strip()
-        identifier = name_to_identifier.get(key)
-        if identifier is None:
+        entry = _resolve_roster_name(str(player_name), exact, by_last)
+        if entry:
+            player_map[entry["identifier"]] = entry["key_cricinfo"]
+        else:
             unmapped.append(player_name)
-            continue
-        cricinfo_id = identifier_to_cricinfo.get(identifier)
-        if not cricinfo_id:
-            unmapped.append(player_name)
-            continue
-        player_map[identifier] = cricinfo_id
 
     if unmapped:
         logger.info(
@@ -148,31 +194,15 @@ def fetch_photos():
 
 @players_bp.route("/api/admin/photo-status", methods=["GET"])
 def photo_status():
-    """Return counts of roster players and how many have photos cached.
+    """Return counts of profiles saved to disk and how many have photo URLs."""
+    profiles: dict = {}
+    if PLAYER_PROFILES_JSON.exists():
+        try:
+            with PLAYER_PROFILES_JSON.open(encoding="utf-8") as f:
+                profiles = json.load(f)
+        except Exception:
+            pass
 
-    Uses Cricsheet identifier keys — the same keys that player_service.py uses
-    when looking up photo_url in the in-memory player_profiles dict.
-    """
-    # Build name → identifier from ELO CSV
-    name_to_identifier: dict[str, str] = {}
-    if not cache.elo_df.empty and "player_name" in cache.elo_df.columns:
-        for pid in cache.elo_df["player_id"].unique():
-            rows = cache.elo_df[cache.elo_df["player_id"] == pid]
-            if not rows.empty:
-                pname = str(rows.iloc[-1]["player_name"]).lower().strip()
-                name_to_identifier[pname] = str(pid)
-
-    total = len(cache.roster)
-    with_photo = 0
-    missing = 0
-
-    for player_name in cache.roster:
-        key = str(player_name).lower().strip()
-        identifier = name_to_identifier.get(key)
-        profile = cache.player_profiles.get(identifier) if identifier else None
-        if profile and profile.get("photo_url"):
-            with_photo += 1
-        else:
-            missing += 1
-
-    return jsonify({"total": total, "with_photo": with_photo, "missing": missing})
+    total = len(profiles)
+    with_photo = sum(1 for p in profiles.values() if p.get("photo_url"))
+    return jsonify({"total": total, "with_photo": with_photo, "missing": total - with_photo})
