@@ -15,8 +15,8 @@ from backend.core.hmm.short_term_hmm import ShortTermHMM
 logger = logging.getLogger(__name__)
 
 _MIN_SHORT_TERM = 15
-_ROLLING_WINDOW = 5
-_ROLLING_MIN = 4
+_ROLLING_WINDOW = 10
+_ROLLING_MIN = 3
 _ELO_CLAMP = (0.75, 1.40)
 
 
@@ -121,9 +121,11 @@ class HMMPredictor:
         if base_score is not None:
             adjusted_score = round(base_score * elo_multiplier, 2)
 
+        next_probs = hmm_result.get("windowed_probs") or hmm_result.get("probs")
+
         return {
             "state": hmm_result.get("state", "unknown"),
-            "probs": hmm_result.get("probs"),
+            "probs": next_probs,
             "source": hmm_result.get("source", "general"),
             "career_avg": round(career_avg, 2) if career_avg is not None else None,
             "career_std": round(career_std, 2) if career_std is not None else None,

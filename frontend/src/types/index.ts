@@ -33,8 +33,12 @@ export interface TeamResult {
   vc: TeamPlayer
   total_credits: number
   fitness: number
+  expected_score: number
+  ceiling_score: number
+  floor_score: number
   team_rolling_avg: number
   team_career_std: number
+  team_hot_prob: number
 }
 
 export interface GenerateResult {

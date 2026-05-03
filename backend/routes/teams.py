@@ -191,8 +191,12 @@ def _team_result_to_dict(t) -> dict:
         "vc": t.vc,
         "total_credits": t.total_credits,
         "fitness": t.fitness,
+        "expected_score": getattr(t, "expected_score", 0.0),
+        "ceiling_score": getattr(t, "ceiling_score", 0.0),
+        "floor_score": getattr(t, "floor_score", 0.0),
         "team_rolling_avg": t.team_rolling_avg,
         "team_career_std": t.team_career_std,
+        "team_hot_prob": getattr(t, "team_hot_prob", 0.0),
     }
 
 

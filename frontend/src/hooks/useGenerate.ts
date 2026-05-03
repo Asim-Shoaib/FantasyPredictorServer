@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { api } from '@/api/client'
 import type { GenerateResult, EvoPoint, SSEEvent } from '@/types'
+import type { Constraints } from '@/components/constraints/ConstraintsForm'
 
 export type GenerateStatus = 'idle' | 'running' | 'done' | 'error'
 
@@ -18,7 +19,7 @@ export function useGenerate() {
   const [currentStrategy, setCurrentStrategy] = useState<string>('')
   const esRef = useRef<EventSource | null>(null)
 
-  const generate = useCallback(async (teamA: string, teamB: string) => {
+  const generate = useCallback(async (teamA: string, teamB: string, constraints: Constraints) => {
     if (esRef.current) esRef.current.close()
 
     setStatus('running')
@@ -28,7 +29,7 @@ export function useGenerate() {
     setCurrentStrategy('safe')
 
     try {
-      const { run_id } = await api.startGenerate(teamA, teamB)
+      const { run_id } = await api.startGenerate(teamA, teamB, constraints)
       const es = new EventSource(`/api/stream/${run_id}`)
       esRef.current = es
 

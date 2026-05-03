@@ -31,7 +31,7 @@ function FormBadge({ form }: { form: PlayerProfile['form_state'] }) {
   }
   if (form === 'avg') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-slate-500/20 text-slate-400 border border-slate-500/30">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">
         <Minus className="w-3 h-3" />
         AVG
       </span>
@@ -193,6 +193,9 @@ export default function PlayerCard({
 
           <div className="flex-1 min-w-0 mt-0.5">
             <p className="text-sm font-semibold text-white leading-tight truncate pr-12">
+              <span className="text-xs font-semibold text-slate-500 mr-2">
+                Elo {fmt(player.elo_post, 0)}
+              </span>
               {player.player_name}
             </p>
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">

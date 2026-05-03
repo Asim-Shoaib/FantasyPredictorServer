@@ -1,9 +1,10 @@
-import { useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { RefreshCw, ArrowLeft, AlertTriangle } from 'lucide-react'
 import { useGenerate } from '@/hooks/useGenerate'
 import { getFranchise } from '@/constants/franchises'
+import { ConstraintsForm, type Constraints } from '@/components/constraints/ConstraintsForm'
 import EvolutionDashboard from '@/components/evolution/EvolutionDashboard'
 import WarRoom from '@/components/warroom/WarRoom'
 
@@ -15,31 +16,53 @@ interface ResultsProps {
 export function Results({ teamA, teamB }: ResultsProps) {
   const navigate = useNavigate()
   const { status, progress, result, error, currentStrategy, generate, reset } = useGenerate()
+  const [constraints, setConstraints] = useState<Constraints | null>(null)
+  const [isSubmittingConstraints, setIsSubmittingConstraints] = useState(false)
 
   const franchiseA = getFranchise(teamA)
   const franchiseB = getFranchise(teamB)
 
-  // Kick off generation immediately on mount
+  // Kick off generation once constraints are set
   useEffect(() => {
-    if (teamA && teamB) {
-      generate(teamA, teamB)
+    if (constraints && teamA && teamB && status === 'idle') {
+      generate(teamA, teamB, constraints)
     }
     // Cleanup on unmount — reset to avoid stale state if user navigates back
     return () => {
       reset()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teamA, teamB])
+  }, [constraints])
+
+  function handleConstraintsSubmit(c: Constraints) {
+    setIsSubmittingConstraints(true)
+    setConstraints(c)
+    setTimeout(() => setIsSubmittingConstraints(false), 300)
+  }
 
   function handleRetry() {
     reset()
-    generate(teamA, teamB)
+    if (constraints) {
+      generate(teamA, teamB, constraints)
+    }
   }
 
   // Guard: if no teams set, redirect home
   if (!teamA || !teamB) {
     navigate('/')
     return null
+  }
+
+  // Show constraints form if not submitted yet
+  if (!constraints) {
+    return (
+      <ConstraintsForm
+        teamA={teamA}
+        teamB={teamB}
+        onSubmit={handleConstraintsSubmit}
+        isLoading={isSubmittingConstraints}
+      />
+    )
   }
 
   return (

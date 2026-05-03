@@ -53,31 +53,13 @@ function FormDot({ form }: { form: TeamPlayer['form_state'] }) {
       />
     )
   if (form === 'avg')
-    return <span className="w-2 h-2 rounded-full flex-shrink-0 bg-slate-500" />
+    return (
+      <span
+        className="w-2 h-2 rounded-full flex-shrink-0"
+        style={{ background: '#38bdf8', boxShadow: '0 0 4px #38bdf8' }}
+      />
+    )
   return <span className="w-2 h-2 rounded-full flex-shrink-0 bg-slate-700" />
-}
-
-function VolatilityBar({ std }: { std: number }) {
-  const maxStd = 40
-  const pct = Math.min((std / maxStd) * 100, 100)
-  const color = std < 10 ? '#22c55e' : std < 20 ? '#eab308' : '#ef4444'
-
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-slate-500 w-16 shrink-0">
-        Vol:{' '}
-        <span className="font-bold" style={{ color }}>
-          {fmt(std, 1)}
-        </span>
-      </span>
-      <div className="flex-1 h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${color}88, ${color})` }}
-        />
-      </div>
-    </div>
-  )
 }
 
 function MiniAvatar({
@@ -169,7 +151,10 @@ function CaptainCard({
 
       {/* Info */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-0.5">
+        <div className="flex items-center gap-2 mb-0.5">
+          <span className="text-xs font-semibold text-slate-500 shrink-0">
+            Elo {fmt(player.elo_post, 0)}
+          </span>
           <p className="text-sm font-bold text-white truncate">{player.player_name}</p>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -230,6 +215,9 @@ function PlayerRow({
           isCaptain || isVc ? 'text-white font-bold' : 'text-slate-300'
         )}
       >
+        <span className="text-xs font-semibold text-slate-500 mr-2">
+          Elo {fmt(player.elo_post, 0)}
+        </span>
         {player.player_name}
       </p>
 
@@ -317,9 +305,23 @@ function TeamCompositionBar({ players }: { players: TeamPlayer[] }) {
   )
 }
 
+function roleSortKey(role: string): number {
+  const r = role.toLowerCase()
+  if (r.includes('wicket') || r === 'wk' || r === 'wk-batter') return 0
+  if (r.includes('bat')) return 1
+  if (r.includes('all')) return 2
+  if (r.includes('bowl')) return 3
+  return 4
+}
+
 export default function TeamColumn({ result, rank }: TeamColumnProps) {
   const meta = STRATEGY_META[result.strategy]
   const Icon = meta.icon
+  const sortedPlayers = [...result.players].sort((a, b) => {
+    const order = roleSortKey(a.role) - roleSortKey(b.role)
+    if (order !== 0) return order
+    return a.player_name.localeCompare(b.player_name)
+  })
 
   return (
     <div
@@ -373,24 +375,29 @@ export default function TeamColumn({ result, rank }: TeamColumnProps) {
         <div className="rounded-xl bg-white/[0.04] px-3 py-2.5">
           <div className="flex items-center gap-1.5 mb-1">
             <Award className="w-3 h-3 text-slate-500" />
-            <p className="text-xs text-slate-500">Budget</p>
+            <p className="text-xs text-slate-500">Expected</p>
           </div>
           <p className="text-sm font-black text-white">
-            {result.total_credits.toFixed(1)}
-            <span className="text-xs text-slate-500 font-normal ml-0.5">/ 100 cr</span>
+            {fmt(result.expected_score, 1)}
           </p>
         </div>
         <div className="rounded-xl bg-white/[0.04] px-3 py-2.5">
           <div className="flex items-center gap-1.5 mb-1">
             <TrendingUp className="w-3 h-3 text-slate-500" />
-            <p className="text-xs text-slate-500">Fitness</p>
+            <p className="text-xs text-slate-500">Ceiling</p>
           </div>
           <p className="text-sm font-black" style={{ color: meta.color }}>
-            {fmt(result.fitness, 3)}
+            {fmt(result.ceiling_score, 1)}
           </p>
         </div>
-        <div className="col-span-2">
-          <VolatilityBar std={result.team_career_std} />
+        <div className="rounded-xl bg-white/[0.04] px-3 py-2.5 col-span-2">
+          <div className="flex items-center gap-1.5 mb-1">
+            <Shield className="w-3 h-3 text-slate-500" />
+            <p className="text-xs text-slate-500">Floor</p>
+          </div>
+          <p className="text-sm font-black text-white">
+            {fmt(result.floor_score, 1)}
+          </p>
         </div>
       </div>
 
@@ -414,7 +421,7 @@ export default function TeamColumn({ result, rank }: TeamColumnProps) {
         <p className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-1 py-1">
           Full XI
         </p>
-        {result.players.map((player, i) => (
+        {sortedPlayers.map((player, i) => (
           <PlayerRow
             key={player.player_id}
             player={player}

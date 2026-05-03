@@ -53,6 +53,29 @@ def init_cache() -> None:
         elo_df = pd.DataFrame()
 
     roster = _load_json(ROSTER_JSON)
+    # If roster overrides are missing, derive from ELO CSV (canonical source of truth).
+    # For each player, use their most recent 2026 PSL match to determine current team.
+    if not roster and not elo_df.empty:
+        roster = {}
+        psl_df = elo_df[elo_df["league"].str.lower() == "psl"].copy() if "league" in elo_df.columns else elo_df.copy()
+        if not psl_df.empty and "match_date" in psl_df.columns:
+            # Filter to 2026 matches only
+            psl_df["match_date"] = pd.to_datetime(psl_df["match_date"], errors="coerce")
+            psl_df = psl_df[psl_df["match_date"].dt.year == 2026].copy()
+            
+            if not psl_df.empty:
+                # Sort by match_date descending to get most recent 2026 matches first
+                psl_df = psl_df.sort_values("match_date", ascending=False)
+                
+                # For each player, take their most recent 2026 team from PSL matches
+                if "player_name" in psl_df.columns and "team" in psl_df.columns:
+                    seen_players = set()
+                    for _, row in psl_df.iterrows():
+                        player_name = str(row["player_name"]).strip()
+                        if player_name and player_name not in seen_players:
+                            roster[player_name] = str(row["team"]).strip()
+                            seen_players.add(player_name)
+                    logger.info("Inferred roster from 2026 PSL matches: %d unique players", len(roster))
     role_cache = _load_json(ROLE_CACHE_JSON)
     player_profiles = _load_json(PLAYER_PROFILES_JSON)
     profiles_with_photo = sum(
@@ -121,4 +144,24 @@ def get_franchise_list() -> list[str]:
             team = str(entry)
         if team:
             teams.add(team)
+    # If roster overrides are not present, attempt to derive teams from
+    # match JSON files (e.g. data/psl_male_json/*.json) as a fallback.
+    if not teams:
+        json_dir = _DATA_DIR / "psl_male_json"
+        if json_dir.exists() and json_dir.is_dir():
+            for p in json_dir.glob("*.json"):
+                try:
+                    with p.open(encoding="utf-8") as f:
+                        data = json.load(f)
+                    info = data.get("info") if isinstance(data, dict) else None
+                    file_teams = []
+                    if isinstance(info, dict):
+                        file_teams = info.get("teams") or info.get("players") and list(info.get("players").keys())
+                    for t in (file_teams or []):
+                        if t:
+                            teams.add(t)
+                except Exception:
+                    # ignore malformed files
+                    continue
+
     return sorted(teams)

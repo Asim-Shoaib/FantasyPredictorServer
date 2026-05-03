@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { Trophy, Users, RefreshCw } from 'lucide-react'
 import type { GenerateResult, TeamPlayer } from '@/types'
 import { getFranchise } from '@/constants/franchises'
-import { cn, roleBadgeColor, roleShort } from '@/lib/utils'
+import { cn, fmt, roleBadgeColor, roleShort } from '@/lib/utils'
 import TeamColumn from './TeamColumn'
 
 interface WarRoomProps {
@@ -49,6 +49,9 @@ function SharedPlayerBadge({
           isCore ? 'text-white' : 'text-slate-300'
         )}
       >
+        <span className="text-xs font-semibold text-slate-500 mr-2">
+          Elo {fmt(player.elo_post, 0)}
+        </span>
         {player.player_name}
       </p>
       {/* Role */}
