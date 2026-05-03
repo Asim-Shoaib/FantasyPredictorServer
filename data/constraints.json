@@ -1,0 +1,19 @@
+{
+  "budget": 100,
+  "max_per_franchise": 7,
+  "min_wk": 1,
+  "min_batters": 3,
+  "min_bowlers": 3,
+  "min_allrounders": 1,
+  "population_size": 200,
+  "generations": 150,
+  "crossover_rate": 0.8,
+  "mutation_rate": 0.05,
+  "elitism_count": 10,
+  "excluded_players": [],
+  "locked_players": [],
+  "team_a": "",
+  "team_b": "",
+  "team_size": 11,
+  "tournament_size": 5
+}

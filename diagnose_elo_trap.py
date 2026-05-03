@@ -178,7 +178,8 @@ for elo_val in [1100, 1250, 1400, 1500, 1550, 1600, 1650, 1720, 1800, 1900]:
 
 hdr("PART 4 -- REAL DATA CHECK (from all_leagues_player_match_elo.csv)")
 
-csv_path = Path("data/all_leagues_player_match_elo.csv")
+_ROOT = Path(__file__).parent.resolve()
+csv_path = _ROOT / "data" / "all_leagues_player_match_elo.csv"
 if not csv_path.exists():
     print(f"\n  CSV not found at {csv_path}")
     print(f"     Run `python run.py --update-data` to generate it.")

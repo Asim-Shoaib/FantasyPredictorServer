@@ -12,8 +12,20 @@
 __pycache__/
 /docs/
 .claude/
-data/
+# Large generated data files — not committed
+data/all_leagues_player_match_elo.csv
+data/psl_male_json/
+data/ipl_male_json/
+data/bbl_male_json/
+data/bpl_male_json/
+data/cpl_male_json/
+data/sa20_male_json/
+data/ilt20_male_json/
+data/lpl_male_json/
 notebooks/
 frontend/node_modules
 frontend/dist/
 backend/static/
+
+data/t20s_male_json/
+_rekey_log.txt

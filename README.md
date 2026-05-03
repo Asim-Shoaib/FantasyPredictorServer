@@ -1,530 +1,359 @@
-# DraftGenius 🏏
+# DraftGenius
 
-> **AI-powered PSL 2026 fantasy XI builder** — pick a match, pick two franchises, get three optimised teams in seconds.
+**AI-powered PSL fantasy cricket team optimizer**
 
-DraftGenius combines **Hidden Markov Model (HMM) form prediction**, a **T20-tuned Elo rating engine**, and a **Genetic Algorithm (GA) team optimizer** into a full-stack application. The React frontend is served by the **Vite dev server** which proxies all `/api` calls to Flask — no build step needed during development.
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![Node](https://img.shields.io/badge/node-18%2B-green)
+![Flask](https://img.shields.io/badge/flask-3.x-lightgrey)
+![React](https://img.shields.io/badge/react-18-61dafb)
+![License](https://img.shields.io/badge/license-MIT-orange)
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-
-| Tool | Version |
-|---|---|
-| Python | ≥ 3.10 |
-| pip | latest |
-| Node.js + npm | ≥ 18 |
+> **Prerequisite:** Python 3.11+, Node 18+, and the [data files](#required-data-files) in place.
 
 ```bash
-# Install Python dependencies
+# 1. Install Python dependencies (from the src/ directory)
 pip install -r requirements.txt
 
-# Install frontend dependencies (first time only)
+# 2. Install frontend dependencies
 cd frontend && npm install && cd ..
-```
 
-**Terminal 1 — backend API:**
-```bash
+# 3. Start both servers
+#    Terminal A — Flask API on http://localhost:5000
 python run.py
-```
 
-**Terminal 2 — frontend dev server:**
-```bash
+#    Terminal B — Vite dev server on http://localhost:5173
 cd frontend && npm run dev
 ```
 
-Open **http://localhost:5173** in your browser. Vite proxies all `/api/*` requests to Flask at port 5000.
+Open **http://localhost:5173** — the frontend proxies all `/api/*` calls to the Flask backend automatically.
 
-> **Single-terminal shortcut:** `python run.py --with-frontend` launches both together.
+> **One-command option:** `python run.py --with-frontend` starts both servers in a single terminal.
 
 ---
 
-## Data Files Required
+## What is DraftGenius?
 
-The following files must be present before starting. They are **not** included in the repository due to size.
+DraftGenius is a full-stack web application that generates optimised PSL fantasy cricket teams for a selected match-up. Pick two franchises, and the system produces three distinct XI recommendations — **Safe**, **Explosive**, and **Balanced** — in seconds, complete with live Genetic Algorithm progress streamed to the browser.
 
-| Path | Description | Size |
-|---|---|---|
-| `data/all_leagues_player_match_elo.csv` | Full match history with Elo columns — the core dataset | ~35 MB |
-| `data/psl_2026_roster_overrides.json` | PSL 2026 franchise → player mapping | small |
-| `data/people.csv` | Cricsheet player registry (name ↔ ID mapping) | small |
-| `models/hmm_form_models.joblib` | Pre-trained role-level HMM (bundled) | ~30 KB |
+Three AI/ML techniques work together to score every player:
 
-Optional:
+- **Hidden Markov Model (HMM) form prediction** — classifies each player's current form as *cold*, *average*, or *hot* and outputs transition probabilities for their next appearance.
+- **Elo rating** — tracks each player's relative strength chronologically across eight T20 leagues (PSL, IPL, BBL, BPL, CPL, SA20, ILT20, LPL) and converts it into a per-match score multiplier clamped to [0.75, 1.40].
+- **Genetic Algorithm optimiser** — searches the legal team space (budget, role counts, franchise limits) and returns the best XI for each of three risk strategies.
 
-| Path | Description |
+The React frontend streams live GA progress via Server-Sent Events so you can watch fitness converge generation by generation.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
 |---|---|
-| `data/output/role_cache.json` | ESPN-scraped role cache (player_id → role) |
-| `data/output/player_profiles.json` | ESPN photo URL cache |
-| `data/credits_override.json` | Manual credit overrides for specific players |
-| `data/active_overrides.json` | Persisted bench/reinstate state |
-| `data/constraints.json` | Persisted GA constraint settings |
+| Backend language | Python 3.11+ |
+| API framework | Flask 3.x + flask-cors |
+| Data processing | pandas, numpy |
+| Machine learning | hmmlearn, scikit-learn, joblib |
+| Optimiser | Custom Genetic Algorithm (pure Python + numpy) |
+| Frontend language | TypeScript |
+| Frontend framework | React 18 + Vite 5 |
+| Styling | Tailwind CSS 3 |
+| Charts | Recharts |
+| Animations | Framer Motion |
+| Icons | Lucide React |
 
 ---
 
-## run.py — CLI Reference
+## Prerequisites
 
-```
-python run.py [OPTIONS]
-```
-
-| Flag | Default | Description |
-|---|---|---|
-| `--port PORT` | `5000` | Flask API port to listen on |
-| `--with-frontend` | off | Also launch `npm run dev` in `frontend/` alongside the backend |
-| `--update-data` | off | Download latest match data from Cricsheet, then re-run the Elo pipeline |
-| `--retrain-models` | off | Delete all cached per-player HMM models so they are re-fitted at next startup |
-
-### Startup sequence
-
-```
-parse args
-  → [--update-data]    CricsheetUpdater + Pipeline + EloEngine
-  → [--retrain-models] delete models/per_player/*.joblib
-  → check_data_files()     (warn if critical CSVs / JSONs missing)
-  → init_cache()           (load all data into memory)
-  → create_app()           (register Flask blueprints)
-  → [--with-frontend]  launch Vite dev server subprocess
-  → app.run()
-```
-
----
-
-## Project Layout
-
-```
-DraftGeniusServer/
-├── run.py                          ← Single entry point (see above)
-├── requirements.txt                ← Python dependencies
-│
-├── data/                           ← All data files (NOT in repo)
-│   ├── all_leagues_player_match_elo.csv   ← 35 MB match history + Elo
-│   ├── people.csv                         ← Cricsheet player registry
-│   ├── psl_2026_roster_overrides.json     ← PSL 2026 franchise mapping
-│   ├── credits_override.json              ← Manual credit overrides
-│   ├── active_overrides.json              ← Bench/reinstate state (auto-written)
-│   ├── constraints.json                   ← Saved GA settings (auto-written)
-│   └── output/
-│       ├── role_cache.json                ← ESPN role cache
-│       └── player_profiles.json           ← ESPN photo URL cache
-│
-├── models/
-│   ├── hmm_form_models.joblib             ← Pre-trained role-level HMM
-│   ├── hmm_relative_form_models.joblib    ← Relative form variant
-│   └── per_player/                        ← Auto-created per-player HMMs
-│
-├── backend/
-│   ├── app.py                             ← Flask factory (API + SPA)
-│   ├── data_cache.py                      ← Startup data loader / singletons
-│   ├── cli.py                             ← Data pipeline CLI (--update-data)
-│   │
-│   ├── core/
-│   │   ├── elo_engine.py                  ← T20 Elo engine
-│   │   ├── scoring.py                     ← Fantasy points calculator
-│   │   ├── form_features.py               ← Rolling-avg feature builder
-│   │   └── hmm/
-│   │       ├── general_hmm.py             ← Role-level HMM wrapper
-│   │       ├── short_term_hmm.py          ← Per-player short-term HMM
-│   │       └── predictor.py               ← Unified HMMPredictor (used by backend)
-│   │
-│   ├── services/
-│   │   ├── player_service.py              ← Builds PlayerProfile list
-│   │   ├── team_generator.py              ← Genetic Algorithm optimizer
-│   │   ├── credit_engine.py               ← Auto-derives fantasy credits
-│   │   ├── role_resolver.py               ← ESPN role resolver
-│   │   └── profile_fetcher.py             ← ESPN photo fetcher
-│   │
-│   ├── routes/
-│   │   ├── players.py                     ← /api/players, /api/players/<id>/history
-│   │   ├── teams.py                       ← /api/generate-teams, /api/stream/<run_id>
-│   │   ├── match.py                       ← /api/match/teams
-│   │   ├── roster.py                      ← /api/roster/bench, /api/roster/reinstate
-│   │   └── constraints.py                 ← /api/constraints
-│   │
-│   ├── jobs/
-│   │   ├── data_updater.py                ← Cricsheet ZIP downloader (ETag-aware)
-│   │   ├── match_parser.py                ← Cricsheet JSON → rows
-│   │   ├── match_loader.py                ← Loads raw match rows
-│   │   ├── pipeline.py                    ← Orchestrates parse → score → Elo
-│   │   └── fantasy_elo_pipeline.py        ← Thin wrapper
-│   │
-│   ├── utils/
-│   │   ├── config.py                      ← PipelineConfig dataclass
-│   │   ├── models.py                      ← Shared type definitions
-│   │   └── smart_cache.py                 ← Simple TTL cache helper
-│   │
-│   └── static/                            ← Built React SPA (served at /)
-│
-└── frontend/                              ← React + Vite + TypeScript source
-    ├── src/
-    │   ├── main.tsx                       ← React entry point
-    │   ├── App.tsx                        ← Router + franchise CSS vars
-    │   ├── pages/
-    │   │   ├── Home.tsx                   ← Match selector page
-    │   │   ├── Match.tsx                  ← Player pool / war room page
-    │   │   └── Results.tsx                ← Generated teams results page
-    │   ├── components/
-    │   │   ├── players/                   ← Player card components
-    │   │   ├── warroom/                   ← War-room panel components
-    │   │   └── evolution/                 ← GA evolution chart
-    │   ├── api/                           ← Typed fetch wrappers
-    │   ├── hooks/                         ← Custom React hooks
-    │   ├── types/                         ← TypeScript interfaces
-    │   ├── constants/                     ← Franchise colours / config
-    │   └── lib/                           ← Shared utilities
-    ├── vite.config.ts                     ← Vite build → backend/static/
-    └── tailwind.config.ts
-```
-
----
-
-## How It Works — Full Pipeline
-
-### 1. Data Ingestion (`--update-data`)
-
-```
-Cricsheet.org (ZIP archives)
-  ↓  ETag-aware HTTP download (CricsheetUpdater)
-  ↓  Extract new JSON match files only
-  ↓  Parse each match: batting / bowling / fielding rows (match_parser.py)
-  ↓  Merge with people.csv for stable player IDs
-  ↓  Apply FantasyPointsCalculator scoring rules
-  ↓  Run EloEngine.apply() across all leagues chronologically
-  ↓  Write → data/all_leagues_player_match_elo.csv
-```
-
-Supported leagues: **PSL, IPL, BBL, BPL, CPL, SA20, ILT20, LPL** (configurable via `--leagues`).
-
-### 2. Fantasy Points Scoring (`backend/core/scoring.py`)
-
-| Action | Points |
+| Tool | Minimum version |
 |---|---|
-| Run scored | +1 |
-| Four | +4 |
-| Six | +6 |
-| Milestone bonus (25/50/75/100) | +4 / +8 / +12 / +16 |
-| Wicket | +30 |
-| LBW / Bowled bonus | +8 |
-| Wicket haul (3W/4W/5W) | +4 / +8 / +12 |
-| Maiden over | +12 |
-| Dot ball | +1 |
-| Catch | +8 (3+ catches = +4 bonus) |
-| Stumping | +12 |
-| Direct run-out | +12 |
-| Indirect run-out | +6 |
-| Economy rate bonus/penalty | ±2 to ±6 |
-| Strike rate bonus/penalty | ±2 to ±6 |
-
-### 3. T20 Elo Engine (`backend/core/elo_engine.py`)
-
-The Elo engine is purpose-built for T20 cricket — it converges fast and handles the noisy, high-variance nature of the format.
-
-**Key design choices:**
-
-| Feature | Detail |
-|---|---|
-| Base K-factor | **64** (vs. chess's 32) — T20 form changes fast |
-| Adaptive K | K starts at `2× base` for new players, decays toward `0.75× base` after 30+ games |
-| Re-entry boost | +50% K if a player returns after >6 months away |
-| Associate damping | K × 0.15 when both teams are associate nations |
-| Inactivity decay | −2.5 Elo/month after 4-month grace, floored at 1100 |
-| Actual score | Sigmoid of `(player_pts − match_avg_pts) / 40` → bounds result to [0, 1] |
-| Expected score | Standard Elo formula: `1 / (1 + 10^((opponent_avg_elo − player_elo) / 400))` |
-| Elo → multiplier | z-score: `(elo − mean) / (2 × std)`, clamped to **[0.75, 1.40]** |
-| Pool calibration | z-score is re-computed relative to the two franchises in the current match |
-
-### 4. HMM Form Prediction (`backend/core/hmm/`)
-
-Two-tier HMM system:
-
-| Tier | Class | Used when |
-|---|---|---|
-| **General** | `GeneralHMM` | Player has < 15 matches, uses role-level model (`hmm_form_models.joblib`) |
-| **Per-player** | `ShortTermHMM` | Player has ≥ 15 matches, fits / loads a personal model from `models/per_player/` |
-
-The unified `HMMPredictor` (used by the Flask backend) outputs:
-
-```
-{
-  "state":         "hot" | "avg" | "cold" | "unknown",
-  "probs":         [p_hot, p_avg, p_cold],
-  "source":        "short_term" | "general",
-  "career_avg":    float,
-  "career_std":    float,
-  "rolling_avg":   float,   # last 4–5 matches
-  "rolling_window": int,
-  "elo_post":      float,
-  "elo_multiplier": float,  # [0.75, 1.40]
-  "adjusted_score": float   # rolling_avg × elo_multiplier
-}
-```
-
-Per-player models persist to `models/per_player/` — no re-training on restart unless `--retrain-models` is passed.
-
-### 5. Credit Engine (`backend/services/credit_engine.py`)
-
-Credits are auto-derived from performance data on a **6.5 – 10.5** scale (0.5 steps):
-
-1. Compute each player's percentile rank within the match-pool (rolling avg or career avg)
-2. Map percentile to a credit bucket via fixed thresholds
-3. Adjust ±0.5 based on Elo multiplier (>1.1 → bump up; <0.9 → bump down)
-4. Manual `credits_override.json` always takes precedence
-
-### 6. Genetic Algorithm (`backend/services/team_generator.py`)
-
-The GA runs **three independent optimisations** in sequence — one per strategy:
-
-| Strategy | Fitness function | Captain logic |
-|---|---|---|
-| **Safe** | `Σ adjusted_score − 1.0 × mean(career_std)` | Highest score/std ratio |
-| **Explosive** | `Σ (adjusted_score + 0.8 × career_std)` | Highest score + std |
-| **Balanced** | `Σ adjusted_score` | Highest adjusted score |
-
-**GA parameters (defaults):**
-
-| Parameter | Value |
-|---|---|
-| Population size | 200 |
-| Generations | 150 |
-| Crossover rate | 0.80 |
-| Mutation rate | 0.05 |
-| Tournament size | 5 |
-| Elitism count | 10 |
-
-**Hard constraints checked on every chromosome:**
-
-- Exactly 11 unique players
-- Total credits ≤ 100
-- Max 7 players from one franchise
-- Min 1 wicketkeeper, 3 batters, 3 bowlers, 1 all-rounder
-
-The GA runs in a **background thread** and streams progress to the frontend via **Server-Sent Events (SSE)** at `/api/stream/<run_id>`.
+| Python | 3.11 |
+| pip | 23+ |
+| Node.js | 18 |
+| npm | 9+ |
 
 ---
 
-## API Reference
+## Installation
 
-### Core Endpoints
+### 1. Clone the repository
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/health` | Server liveness check — `{"status": "ok", "version": "1.0.0"}` |
-| `GET` | `/api/match/teams` | List all available PSL franchise names |
-| `GET` | `/api/players?team_a=X&team_b=Y` | Full player pool for a match (with Elo, form, credits) |
-| `GET` | `/api/players/<id>/history` | Last 20 match records for a player |
-
-### Team Generation
-
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/generate-teams` | Synchronous — runs GA, returns all 3 teams when done |
-| `POST` | `/api/generate-teams-start` | Async — starts GA in background, returns `{"run_id": "..."}` immediately |
-| `GET` | `/api/stream/<run_id>` | SSE stream — yields `progress` events then a final `complete` event |
-| `GET` | `/api/evolution/<run_id>` | GA evolution snapshots (if `track_evolution=true` was passed) |
-
-#### `POST /api/generate-teams` request body
-
-```json
-{
-  "team_a": "Lahore Qalandars",
-  "team_b": "Karachi Kings",
-  "track_evolution": false,
-  "constraints": {
-    "budget": 100,
-    "max_per_franchise": 7,
-    "locked_players": ["player-id-1"],
-    "excluded_players": []
-  }
-}
+```bash
+git clone <repo-url>
+cd <repo>/src
 ```
 
-#### Response shape
+### 2. Install Python dependencies
 
-```json
-{
-  "run_id": "abc123",
-  "match": { "team_a": "...", "team_b": "..." },
-  "safe":      { "strategy": "safe",      "players": [...], "captain": {...}, "vc": {...}, "total_credits": 98.5, "fitness": 312.4, "team_rolling_avg": 42.1, "team_career_std": 18.3 },
-  "explosive": { "strategy": "explosive", "players": [...], ... },
-  "balanced":  { "strategy": "balanced",  "players": [...], ... }
-}
+```bash
+pip install -r requirements.txt
 ```
 
-### Roster Management
+### 3. Install Node dependencies
 
-| Method | Path | Description |
-|---|---|---|
-| `POST` | `/api/roster/bench/<id>` | Mark a player as inactive (persists to `active_overrides.json`) |
-| `POST` | `/api/roster/reinstate/<id>` | Re-activate a benched player |
+```bash
+cd frontend && npm install && cd ..
+```
 
-### Constraints
+### 4. Prepare data files
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/constraints` | Return saved GA constraints |
-| `POST` | `/api/constraints` | Save GA constraints (persists to `data/constraints.json`) |
+The server needs at minimum:
 
----
+- `data/all_leagues_player_match_elo.csv` — master ELO dataset (~35 MB, generated by the pipeline)
+- `models/hmm_form_models.joblib` — pre-trained general HMM artifact
+- `data/psl_2026_roster_overrides.json` — PSL player roster
 
-## Frontend
-
-The React SPA has three pages:
-
-| Page | Route | Description |
-|---|---|---|
-| **Home** | `/` | Franchise selector — pick Team A and Team B |
-| **Match / War Room** | `/match` | Browse the player pool; bench/reinstate players; lock players into the lineup |
-| **Results** | `/results` | View the Safe / Explosive / Balanced teams; see captain/VC picks and player stats |
-
-**Tech stack:**
-
-- React 18 + TypeScript + React Router v6
-- Vite 5 dev server (proxies `/api` → Flask on port 5000)
-- Vanilla CSS + CSS custom properties for franchise theming
-- Recharts for evolution graphs
-- Framer Motion for animations
-- Lucide React for icons
-
-Franchise **primary colours** are injected as CSS custom properties (`--team-a`, `--team-b`) at the app root, making the whole UI theme-aware per match.
+See [Data Pipeline](#data-pipeline) below to build the ELO CSV from raw Cricsheet match JSONs.
 
 ---
 
 ## Running in Development
 
+### Option A — two terminals (recommended)
+
 ```bash
-# Terminal 1 — Flask API (port 5000)
+# Terminal 1: Flask backend (port 5000)
 python run.py
 
-# Terminal 2 — Vite dev server with hot-reload (port 5173)
-cd frontend
-npm run dev
+# Terminal 2: Vite dev server (port 5173, proxies /api → port 5000)
+cd frontend && npm run dev
 ```
 
-Access the app at **http://localhost:5173**. Vite forwards all `/api/*` requests to Flask automatically — no CORS configuration needed in the browser.
+Open `http://localhost:5173` in your browser.
 
-**Single-terminal shortcut:**
+### Option B — single terminal
+
 ```bash
 python run.py --with-frontend
 ```
 
+### run.py flags
+
+| Flag | Default | Description |
+|---|---|---|
+| `--port PORT` | `5000` | Flask listen port |
+| `--with-frontend` | off | Also launch `npm run dev` in `frontend/` |
+| `--update-data` | off | Download latest Cricsheet data and rebuild ELO CSV before starting |
+| `--retrain-models` | off | Delete cached per-player HMM models so they re-fit on first predict |
+
 ---
 
-## Data Update Pipeline
+## Building for Production
 
-To pull the latest match data from Cricsheet and rebuild the Elo CSV:
+```bash
+cd frontend
+npm run build          # runs tsc then vite build → output lands in frontend/dist/
+```
+
+Serve `frontend/dist/` from any CDN or static host and point your Flask deployment at the same `/api/*` prefix.
+
+---
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│         Browser  (React SPA)                    │
+│  • Match picker     • Player pool               │
+│  • Live GA stream   • Team cards                │
+└───────────────────┬─────────────────────────────┘
+                    │  HTTP / SSE  (/api/*)
+                    │  (Vite proxy in dev)
+┌───────────────────▼─────────────────────────────┐
+│         Flask API  (port 5000)                  │
+│                                                 │
+│  /api/match/teams   ← franchise list            │
+│  /api/players       ← player profiles           │
+│  /api/constraints   ← GA settings              │
+│  /api/generate-teams-start  ← async GA          │
+│  /api/stream/<run_id>       ← SSE feed          │
+│  /api/roster/bench  ← bench a player            │
+└─────────┬────────────────────────────┬──────────┘
+          │                            │
+┌─────────▼────────┐        ┌──────────▼──────────┐
+│  HMM Predictor   │        │  Genetic Algorithm   │
+│                  │        │                      │
+│  GeneralHMM      │        │  3 strategies:       │
+│  (role-level)    │        │  • Safe              │
+│  ShortTermHMM    │        │  • Explosive         │
+│  (per-player)    │        │  • Balanced          │
+└─────────┬────────┘        └──────────┬───────────┘
+          │                            │
+┌─────────▼────────────────────────────▼───────────┐
+│          Data Cache  (loaded once at startup)    │
+│                                                  │
+│  ELO CSV (pandas DataFrame)                      │
+│  roster JSON  │  role_cache JSON                 │
+│  per-player HMM models (joblib)                  │
+│  player_profiles JSON (ESPN photo URLs)          │
+└──────────────────────────────────────────────────┘
+```
+
+---
+
+## API Overview
+
+The backend exposes a REST + SSE API under `/api/`. A complete reference — including all request/response shapes, examples, and error codes — is in [`backend/BACKEND.md`](backend/BACKEND.md).
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/health` | Server liveness check |
+| `GET` | `/api/match/teams` | List PSL franchises |
+| `GET` | `/api/players` | Player profiles (optionally filtered by two teams) |
+| `GET` | `/api/players/<id>/history` | Last 20 match records for a player |
+| `GET` | `/api/constraints` | Current GA constraint settings |
+| `POST` | `/api/constraints` | Save constraint overrides |
+| `POST` | `/api/generate-teams` | Synchronous GA — returns all three teams |
+| `POST` | `/api/generate-teams-start` | Start async GA, returns `run_id` |
+| `GET` | `/api/stream/<run_id>` | SSE stream of GA progress + final result |
+| `GET` | `/api/evolution/<run_id>` | Per-generation evolution snapshots |
+| `POST` | `/api/roster/bench/<player_id>` | Bench a player |
+| `POST` | `/api/roster/reinstate/<player_id>` | Reinstate a player |
+| `GET` | `/api/roster/status` | All bench overrides |
+| `POST` | `/api/admin/fetch-photos` | Fetch ESPN headshots for all roster players |
+| `GET` | `/api/admin/photo-status` | Photo coverage counts |
+
+---
+
+## Project Structure
+
+```
+src/
+├── run.py                          # Launcher — Flask + optional Vite
+├── requirements.txt
+├── backend/
+│   ├── app.py                      # Flask app factory
+│   ├── data_cache.py               # Singleton data loader
+│   ├── cli.py                      # Data pipeline CLI
+│   ├── BACKEND.md                  # Full API reference
+│   ├── routes/
+│   │   ├── players.py              # /api/players, /api/players/<id>/history
+│   │   ├── teams.py                # /api/generate-teams, /api/stream/<run_id>
+│   │   ├── roster.py               # /api/roster/bench, reinstate, status
+│   │   ├── constraints.py          # /api/constraints
+│   │   └── match.py               # /api/match/teams
+│   ├── services/
+│   │   ├── player_service.py       # PlayerProfile builder
+│   │   ├── team_generator.py       # GA + TeamConstraints + TeamResult
+│   │   ├── credit_engine.py        # Credits 6.5–10.5
+│   │   └── profile_fetcher.py      # ESPN headshot fetcher
+│   ├── core/
+│   │   ├── hmm/
+│   │   │   ├── predictor.py        # HMMPredictor (unified entry point)
+│   │   │   ├── general_hmm.py      # Role-level HMM
+│   │   │   └── short_term_hmm.py   # Per-player HMM (fitted & cached to disk)
+│   │   ├── elo_engine.py           # Chronological Elo rating
+│   │   ├── scoring.py              # Fantasy points calculator
+│   │   └── form_features.py        # Rolling average feature builder
+│   ├── jobs/
+│   │   ├── pipeline.py             # Main pipeline orchestrator
+│   │   ├── match_parser.py         # Cricsheet JSON → records
+│   │   └── data_updater.py         # Cricsheet download (ETag-aware)
+│   └── utils/
+│       ├── config.py               # PipelineConfig dataclass
+│       └── smart_cache.py          # Parquet-backed parse cache
+├── data/
+│   ├── all_leagues_player_match_elo.csv   # Master ELO dataset (generated)
+│   ├── psl_2026_roster_overrides.json     # Player → franchise mapping
+│   ├── people.csv                         # Cricsheet identifier map
+│   ├── credits_override.json              # Manual credit values
+│   ├── active_overrides.json              # Benched player flags (auto-written)
+│   └── constraints.json                   # Saved GA settings (auto-written)
+├── models/
+│   ├── hmm_form_models.joblib             # Pre-trained general HMM
+│   └── per_player/                        # Per-player HMM cache (auto-generated)
+└── frontend/
+    ├── package.json
+    ├── vite.config.ts                     # Port 5173, /api proxy → :5000
+    ├── tailwind.config.ts
+    └── src/                               # React + TypeScript source
+```
+
+---
+
+## Data Pipeline
+
+The ELO CSV is built offline from Cricsheet-style match JSON archives. You only need to re-run it when you want to ingest new match data.
+
+### Quick rebuild (no download)
+
+```bash
+python -m backend.cli
+```
+
+### Download + rebuild
+
+```bash
+python -m backend.cli --update-data
+```
+
+Or via the launcher:
 
 ```bash
 python run.py --update-data
 ```
 
-This runs `CricsheetUpdater` which:
-1. Downloads ZIP archives for each league (ETag-aware — skips unchanged archives)
-2. Extracts only new JSON match files into `data/<league>_male_json/`
-3. Parses and scores every new match via `FantasyPointsCalculator`
-4. Re-runs `EloEngine.apply()` across all leagues in chronological order
-5. Writes the updated CSV to `data/all_leagues_player_match_elo.csv`
+### Pipeline stages
 
-You can target specific leagues with the CLI directly:
+1. **Download** (`CricsheetUpdater`) — fetches ZIP archives from Cricsheet (ETag-aware; skips unchanged files), unpacks new match JSONs into `data/<league>_male_json/`.
+2. **Parse** (`MatchParser` + `SmartMatchCache`) — converts each Cricsheet match JSON to per-player fantasy-point records. Already-parsed matches are read from `.cache/final_results_cache.parquet` and never re-parsed, making incremental runs fast.
+3. **Score** (`Pipeline.run()`) — applies batting / bowling / fielding fantasy scoring rules.
+4. **Form features** (`FormFeatureBuilder`) — adds rolling average and streak columns.
+5. **Elo** (`EloEngine`) — computes chronological per-player Elo ratings across all leagues and writes the final `data/all_leagues_player_match_elo.csv`.
+6. **Photos** (`ProfileFetcher`, optional with `--fetch-photos`) — fetches ESPN CDN headshot URLs and writes `data/output/player_profiles.json`.
+
+### Supported leagues
+
+`psl`, `ipl`, `bbl`, `bpl`, `cpl`, `sa20`, `ilt20`, `lpl`
+
+### Useful flags
 
 ```bash
-python -m backend.cli --update-data --leagues psl,ipl --cutoff-years 5
+# PSL only, last 3 years
+python -m backend.cli --leagues psl --cutoff-years 3
+
+# Force full re-run even if no new files
+python -m backend.cli --force-pipeline
+
+# Download + rebuild + fetch photos
+python -m backend.cli --update-data --fetch-photos
 ```
+
+Add `data/people.csv` (downloaded from [cricsheet.org/downloads](https://cricsheet.org/downloads/)) for player photo lookups — it maps Cricsheet identifier to ESPN cricinfo ID.
 
 ---
 
-## Configuration Summary
+## Required Data Files
 
-### GA Constraints (`data/constraints.json`)
-
-```json
-{
-  "budget": 100,
-  "team_size": 11,
-  "max_per_franchise": 7,
-  "min_wk": 1,
-  "min_batters": 3,
-  "min_bowlers": 3,
-  "min_allrounders": 1,
-  "population_size": 200,
-  "generations": 150,
-  "crossover_rate": 0.8,
-  "mutation_rate": 0.05,
-  "tournament_size": 5,
-  "elitism_count": 10,
-  "locked_players": [],
-  "excluded_players": []
-}
-```
-
-### Elo Engine Parameters (`EloEngine` defaults)
-
-```python
-EloEngine(
-    initial_elo=1500,
-    base_k=64,
-    adaptive_k=True,
-    associate_damping=0.15,
-    fantasy_scale=40,
-    decay_monthly=2.5,
-    decay_grace_months=4,
-    decay_floor=1100,
-)
-```
-
-### Credits Override (`data/credits_override.json`)
-
-```json
-{
-  "player-id": 9.5
-}
-```
+| Path | Required | Description |
+|---|---|---|
+| `data/all_leagues_player_match_elo.csv` | Yes | Master ELO dataset |
+| `models/hmm_form_models.joblib` | Yes | Pre-trained general HMM artifact |
+| `data/psl_2026_roster_overrides.json` | Recommended | Player roster; inferred from ELO CSV if absent |
+| `data/people.csv` | For photos | Cricsheet identifier → ESPN cricinfo ID map |
+| `models/per_player/*.joblib` | Auto-generated | Per-player HMM models |
+| `data/output/role_cache.json` | Auto-generated | player_id → role map from pipeline |
+| `data/output/player_profiles.json` | Optional | ESPN photo URL cache |
+| `data/credits_override.json` | Optional | Manual credit values |
+| `data/active_overrides.json` | Optional | Bench/available status overrides |
+| `data/constraints.json` | Optional | Persisted GA constraint settings |
 
 ---
 
-## Python Dependencies
+## Contributing
 
-```
-flask>=3.1.0
-flask-cors>=6.0.0
-pandas>=2.0.0
-numpy>=1.24.0
-joblib>=1.3.0
-hmmlearn>=0.3.3
-scikit-learn>=1.3.0
-scipy>=1.11.0
-aiohttp>=3.9.0
-tqdm>=4.65.0
-```
+1. Fork the repository and create a feature branch.
+2. Install all dependencies (Python + Node, see [Installation](#installation)).
+3. Make your changes. For backend changes, verify all `/api/*` endpoints behave correctly. For frontend changes, confirm the Vite dev server hot-reloads cleanly.
+4. Keep commits focused and descriptive.
+5. Open a pull request with a clear summary of what changed and why.
 
 ---
 
-## Architecture Diagram
+## License
 
-```
-Browser (http://localhost:5173)
-  │
-  ▼
-Vite Dev Server  (:5173)
-  ├── /src/**     → Served from frontend/src/ with hot-reload
-  └── /api/**     → Proxied to Flask (:5000)
-        │
-        ▼
-      Flask (backend/app.py)  (:5000)
-        ├── /api/*          → API blueprints (players, teams, roster, constraints, match)
-        │
-        ├── data_cache.py        (singleton data loaded once at startup)
-        │     ├── ELO CSV  →  pandas DataFrame
-        │     ├── Roster JSON
-        │     ├── Role cache
-        │     └── HMMPredictor
-        │
-        ├── player_service.py    (builds PlayerProfile per roster player)
-        │     ├── HMMPredictor.predict()  →  form state + adjusted_score
-        │     └── CreditEngine.compute()  →  credits
-        │
-        └── team_generator.py   (GeneticTeamGenerator)
-              ├── _fitness_safe()
-              ├── _fitness_explosive()
-              └── _fitness_balanced()
-```
+MIT — see `LICENSE` for details.
